@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"github.com/aurorachat/jwt-tokens/tokens"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -10,37 +11,32 @@ import (
 const (
 	ActionAuth = iota
 	ActionRegister
+	ActionRefreshToken
 )
 
-type AuthUser struct {
-	*gorm.Model
-	ID       int
-	Login    string
-	Email    string
-	Password string
+type ActionContext struct {
+	// ActionPayload Can be either RegisterDto or AuthDto
+	ActionPayload interface{}
+	// ActionType Can be either ActionAuth or ActionRegister
+	ActionType   int
+	cancelled    bool
+	cancelReason string
 }
 
-type AuthDto struct {
-	Login    string
-	Email    string
-	Password string
-}
-
-type AuthActionContext struct {
-	User       *AuthUser
-	ActionType int
-	cancelled  bool
-}
-
-func (authCtx *AuthActionContext) Cancelled() bool {
+func (authCtx *ActionContext) Cancelled() bool {
 	return authCtx.cancelled
 }
 
-func (authCtx *AuthActionContext) Cancel() {
-	authCtx.cancelled = true
+func (authCtx *ActionContext) Cancel() {
+	authCtx.CancelWithReason("request has been cancelled")
 }
 
-type Handler func(ctx *AuthActionContext)
+func (authCtx *ActionContext) CancelWithReason(reason string) {
+	authCtx.cancelled = true
+	authCtx.cancelReason = reason
+}
+
+type Handler func(ctx *ActionContext)
 
 type Options struct {
 	Handler     Handler
@@ -49,7 +45,7 @@ type Options struct {
 	SecretToken []byte
 }
 
-type AuthResponseWrapper struct {
+type ResponseWrapper struct {
 	Error *string
 	Data  interface{}
 }
@@ -65,59 +61,113 @@ func NewOptions(handler Handler, database *gorm.DB, server *gin.Engine, secretTo
 
 func Initialize(options *Options) error {
 	tokens.SetSecretToken(options.SecretToken)
+	db, err := newAuthDatabase(options.Database)
 
-	err := options.Database.AutoMigrate(&AuthUser{})
 	if err != nil {
 		return err
 	}
 
-	options.Server.POST("/users/register", func(c *gin.Context) {
-		var user AuthDto
+	service := newAuthService(db)
+
+	options.Server.POST("/auth/register", func(c *gin.Context) {
+		var user RegisterDto
 		err := c.BindJSON(&user)
 		if err != nil {
-			errMsg := err.Error()
-			c.JSON(http.StatusBadRequest, AuthResponseWrapper{
-				Error: &errMsg,
-				Data:  nil,
-			})
+			respondFail(c, http.StatusBadRequest, fmt.Sprintf("payload is incorrect: %s", err.Error()))
 			return
 		}
-		authUserModel := &AuthUser{
-			Login:    user.Login,
-			Email:    user.Email,
-			Password: user.Password,
+
+		ctx := &ActionContext{
+			ActionPayload: user,
+			ActionType:    ActionRegister,
+			cancelled:     false,
+			cancelReason:  "",
 		}
-		ctx := &AuthActionContext{
-			User:       authUserModel,
-			ActionType: ActionRegister,
-			cancelled:  false,
-		}
-		existing := &AuthUser{}
-		err = options.Database.First(&existing, "login = ?", authUserModel.Login).Error
-		if err == nil {
-			errMsg := "user with that login already exists"
-			c.JSON(http.StatusBadRequest, AuthResponseWrapper{
-				Error: &errMsg,
-				Data:  nil,
-			})
+		options.Handler(ctx)
+		if ctx.cancelled {
+			respondFail(c, http.StatusBadRequest, ctx.cancelReason)
 			return
+		}
+
+		err = service.RegisterUser(user.Email, user.Login, user.Password)
+
+		if err != nil {
+			respondFail(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondSuccess(c, http.StatusOK, nil)
+	})
+	options.Server.POST("/auth/login", func(c *gin.Context) {
+		var user AuthDto
+
+		err := c.BindJSON(&user)
+		if err != nil {
+			respondFail(c, http.StatusBadRequest, fmt.Sprintf("payload is incorrect: %s", err.Error()))
+			return
+		}
+
+		ctx := &ActionContext{
+			ActionPayload: user,
+			ActionType:    ActionAuth,
+			cancelled:     false,
 		}
 
 		options.Handler(ctx)
+
 		if ctx.cancelled {
-			errMsg := "your registration request has been cancelled"
-			c.JSON(http.StatusBadRequest, AuthResponseWrapper{
-				Error: &errMsg,
-				Data:  nil,
-			})
+			respondFail(c, http.StatusBadRequest, ctx.cancelReason)
 			return
 		}
 
-		options.Database.Save(authUserModel)
-		c.JSON(http.StatusOK, AuthResponseWrapper{
-			Error: nil,
-			Data:  authUserModel.ID,
+		accessToken, session, err := service.AuthenticateUser(c.RemoteIP(), user.Login, user.Password)
+
+		if err != nil {
+			respondFail(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondSuccess(c, http.StatusOK, gin.H{
+			"accessToken":  accessToken,
+			"refreshToken": session.RefreshToken,
+		})
+	})
+	options.Server.POST("/auth/refresh", func(c *gin.Context) {
+		var inputRefresh string
+		err := c.Bind(&inputRefresh)
+		if err != nil {
+			respondFail(c, http.StatusBadRequest, fmt.Sprintf("payload is incorrect: %s", err.Error()))
+		}
+
+		ctx := &ActionContext{
+			ActionPayload: inputRefresh,
+			ActionType:    ActionRefreshToken,
+			cancelled:     false,
+		}
+		options.Handler(ctx)
+		if ctx.cancelled {
+			respondFail(c, http.StatusBadRequest, ctx.cancelReason)
+			return
+		}
+
+		accessToken, refreshToken, err := service.RefreshAuthToken(inputRefresh)
+		if err != nil {
+			respondFail(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondSuccess(c, http.StatusOK, gin.H{
+			"accessToken":  accessToken,
+			"refreshToken": refreshToken,
 		})
 	})
 	return nil
+}
+
+func respondSuccess(ctx *gin.Context, statusCode int, data interface{}) {
+	ctx.JSON(statusCode, ResponseWrapper{Error: nil, Data: data})
+}
+
+func respondFail(ctx *gin.Context, statusCode int, err string) {
+	ctx.JSON(statusCode, ResponseWrapper{Error: &err, Data: nil})
 }
