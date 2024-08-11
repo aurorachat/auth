@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"database/sql"
 	"errors"
 	"github.com/aurorachat/auth/utils"
 	"github.com/aurorachat/jwt-tokens/tokens"
@@ -77,12 +76,10 @@ func (s *authService) RegisterUser(email, login, password string) error {
 func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, rawPassword string) (string, string, error) {
 	user, err := s.db.GetUserByLogin(loginOrEmail)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			user, err = s.db.GetUserByEmail(loginOrEmail)
+		user, err = s.db.GetUserByEmail(loginOrEmail)
 
-			if err != nil {
-				return "", "", errors.New("user not found")
-			}
+		if err != nil {
+			return "", "", errors.New("user not found")
 		}
 	}
 

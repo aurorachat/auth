@@ -80,7 +80,7 @@ func Initialize(options *Options) error {
 		err = service.RegisterUser(user.Email, user.Login, user.Password)
 
 		if err != nil {
-			respondFail(c, http.StatusInternalServerError, err.Error())
+			respondFail(c, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -98,7 +98,7 @@ func Initialize(options *Options) error {
 		accessToken, refreshToken, err := service.AuthenticateUser(c.RemoteIP(), user.Login, user.Password)
 
 		if err != nil {
-			respondFail(c, http.StatusInternalServerError, err.Error())
+			respondFail(c, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -116,7 +116,7 @@ func Initialize(options *Options) error {
 
 		accessToken, refreshToken, err := service.RefreshAuthToken(inputRefresh)
 		if err != nil {
-			respondFail(c, http.StatusInternalServerError, err.Error())
+			respondFail(c, http.StatusBadRequest, err.Error())
 			return
 		}
 
