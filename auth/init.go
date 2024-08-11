@@ -67,25 +67,13 @@ func Initialize(options *Options) error {
 		return err
 	}
 
-	service := newAuthService(db)
+	service := newAuthService(db, options.Handler)
 
 	options.Server.POST("/auth/register", func(c *gin.Context) {
 		var user RegisterDto
 		err := c.BindJSON(&user)
 		if err != nil {
 			respondFail(c, http.StatusBadRequest, fmt.Sprintf("payload is incorrect: %s", err.Error()))
-			return
-		}
-
-		ctx := &ActionContext{
-			ActionPayload: user,
-			ActionType:    ActionRegister,
-			cancelled:     false,
-			cancelReason:  "",
-		}
-		options.Handler(ctx)
-		if ctx.cancelled {
-			respondFail(c, http.StatusBadRequest, ctx.cancelReason)
 			return
 		}
 
@@ -107,20 +95,7 @@ func Initialize(options *Options) error {
 			return
 		}
 
-		ctx := &ActionContext{
-			ActionPayload: user,
-			ActionType:    ActionAuth,
-			cancelled:     false,
-		}
-
-		options.Handler(ctx)
-
-		if ctx.cancelled {
-			respondFail(c, http.StatusBadRequest, ctx.cancelReason)
-			return
-		}
-
-		accessToken, session, err := service.AuthenticateUser(c.RemoteIP(), user.Login, user.Password)
+		accessToken, refreshToken, err := service.AuthenticateUser(c.RemoteIP(), user.Login, user.Password)
 
 		if err != nil {
 			respondFail(c, http.StatusInternalServerError, err.Error())
@@ -129,7 +104,7 @@ func Initialize(options *Options) error {
 
 		respondSuccess(c, http.StatusOK, gin.H{
 			"accessToken":  accessToken,
-			"refreshToken": session.RefreshToken,
+			"refreshToken": refreshToken,
 		})
 	})
 	options.Server.POST("/auth/refresh", func(c *gin.Context) {
@@ -137,17 +112,6 @@ func Initialize(options *Options) error {
 		err := c.Bind(&inputRefresh)
 		if err != nil {
 			respondFail(c, http.StatusBadRequest, fmt.Sprintf("payload is incorrect: %s", err.Error()))
-		}
-
-		ctx := &ActionContext{
-			ActionPayload: inputRefresh,
-			ActionType:    ActionRefreshToken,
-			cancelled:     false,
-		}
-		options.Handler(ctx)
-		if ctx.cancelled {
-			respondFail(c, http.StatusBadRequest, ctx.cancelReason)
-			return
 		}
 
 		accessToken, refreshToken, err := service.RefreshAuthToken(inputRefresh)

@@ -11,11 +11,12 @@ import (
 )
 
 type authService struct {
-	db *authDatabase
+	db      *authDatabase
+	handler Handler
 }
 
-func newAuthService(db *authDatabase) *authService {
-	return &authService{db}
+func newAuthService(db *authDatabase, handler Handler) *authService {
+	return &authService{db, handler}
 }
 
 func (s *authService) DB() *authDatabase {
@@ -53,6 +54,19 @@ func (s *authService) RegisterUser(email, login, password string) error {
 		Password: string(encryptedPwd),
 	}
 
+	ctx := &ActionContext{
+		ActionPayload: userModel,
+		ActionType:    ActionRegister,
+		cancelled:     false,
+		cancelReason:  "",
+	}
+
+	s.handler(ctx)
+
+	if ctx.cancelled {
+		return errors.New(ctx.cancelReason)
+	}
+
 	err = s.db.AddUser(userModel)
 	if err != nil {
 		return err
@@ -60,20 +74,20 @@ func (s *authService) RegisterUser(email, login, password string) error {
 	return nil
 }
 
-func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, rawPassword string) (string, *Session, error) {
+func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, rawPassword string) (string, string, error) {
 	user, err := s.db.GetUserByLogin(loginOrEmail)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			user, err = s.db.GetUserByEmail(loginOrEmail)
 
 			if err != nil {
-				return "", nil, errors.New("user not found")
+				return "", "", errors.New("user not found")
 			}
 		}
 	}
 
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(rawPassword)) != nil {
-		return "", nil, errors.New("invalid password")
+		return "", "", errors.New("invalid password")
 	}
 
 	session := &Session{
@@ -81,9 +95,23 @@ func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, raw
 		RefreshToken: utils.GenerateOpaqueToken(user.ID),
 		GivenToIp:    remoteIp,
 	}
+
+	ctx := &ActionContext{
+		ActionPayload: session,
+		ActionType:    ActionAuth,
+		cancelled:     false,
+		cancelReason:  "",
+	}
+
+	s.handler(ctx)
+
+	if ctx.cancelled {
+		return "", "", errors.New(ctx.cancelReason)
+	}
+
 	err = s.db.AddSession(session)
 	if err != nil {
-		return "", nil, err
+		return "", "", err
 	}
 	createdJwt, err := tokens.CreateJWT(jwt.MapClaims{
 		"sub": user.ID,
@@ -92,13 +120,23 @@ func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, raw
 		"iat": time.Now().Add(time.Hour).Unix(),
 	})
 
-	return createdJwt, session, nil
+	return createdJwt, session.RefreshToken, nil
 }
 
 func (s *authService) RefreshAuthToken(refreshToken string) (string, string, error) {
 	session, err := s.db.GetSessionByRefreshToken(refreshToken)
 	if err != nil {
 		return "", "", err
+	}
+	ctx := &ActionContext{
+		ActionPayload: session,
+		ActionType:    ActionAuth,
+		cancelled:     false,
+		cancelReason:  "",
+	}
+	s.handler(ctx)
+	if ctx.cancelled {
+		return "", "", errors.New(ctx.cancelReason)
 	}
 	session.RefreshToken = utils.GenerateOpaqueToken(session.UserID)
 	err = s.db.UpdateSession(session)
