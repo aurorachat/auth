@@ -51,6 +51,7 @@ func (s *authService) RegisterUser(email, login, password string) error {
 		Email:    email,
 		Login:    login,
 		Password: string(encryptedPwd),
+		Role:     "User",
 	}
 
 	ctx := &ActionContext{
@@ -87,6 +88,10 @@ func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, raw
 		return "", "", errors.New("invalid password")
 	}
 
+	if user.Deactivated {
+		return "", "", errors.New("this account is deactivated")
+	}
+
 	session := &Session{
 		UserID:       user.ID,
 		RefreshToken: utils.GenerateOpaqueToken(user.ID),
@@ -111,10 +116,12 @@ func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, raw
 		return "", "", err
 	}
 	createdJwt, err := tokens.CreateJWT(jwt.MapClaims{
-		"sub": user.ID,
-		"iss": "github.com/aurorachat/auth",
-		"exp": time.Now().Add(time.Minute * 30).Unix(),
-		"iat": time.Now().Add(time.Hour).Unix(),
+		"sub":       user.ID,
+		"iss":       "github.com/aurorachat/auth",
+		"exp":       time.Now().Add(time.Minute * 5).Unix(),
+		"iat":       time.Now().Unix(),
+		"role":      user.Role,
+		"sessionId": session.ID,
 	})
 
 	return createdJwt, session.RefreshToken, nil
@@ -127,9 +134,16 @@ func (s *authService) RefreshAuthToken(refreshToken string) (string, string, err
 	}
 	ctx := &ActionContext{
 		ActionPayload: session,
-		ActionType:    ActionAuth,
+		ActionType:    ActionRefreshToken,
 		cancelled:     false,
 		cancelReason:  "",
+	}
+	user, err := s.db.GetUserById(session.UserID)
+	if err != nil {
+		return "", "", err
+	}
+	if user.Deactivated {
+		return "", "", errors.New("this account is deactivated")
 	}
 	s.handler(ctx)
 	if ctx.cancelled {
@@ -141,10 +155,12 @@ func (s *authService) RefreshAuthToken(refreshToken string) (string, string, err
 		return "", "", err
 	}
 	createdJwt, err := tokens.CreateJWT(jwt.MapClaims{
-		"sub": session.UserID,
-		"iss": "github.com/aurorachat/auth",
-		"exp": time.Now().Add(time.Minute * 30).Unix(),
-		"iat": time.Now().Add(time.Hour).Unix(),
+		"sub":       user.ID,
+		"iss":       "github.com/aurorachat/auth",
+		"exp":       time.Now().Add(time.Minute * 5).Unix(),
+		"iat":       time.Now().Unix(),
+		"role":      user.Role,
+		"sessionId": session.ID,
 	})
 	return createdJwt, session.RefreshToken, err
 }

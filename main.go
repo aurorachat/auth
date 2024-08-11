@@ -15,9 +15,21 @@ func main() {
 		panic(err)
 	}
 	e := gin.Default()
-	err = auth.Initialize(auth.NewOptions(func(ctx *auth.ActionContext) {
+	authE, err := auth.NewEngine(auth.NewOptions(func(ctx *auth.ActionContext) {
 		fmt.Println("OH WOW! New user is being!")
 	}, db, e, []byte("gagwaughawuta")))
+	if err != nil {
+		panic(err)
+	}
+	err = authE.SetUserActivated(1, false)
+	if err != nil {
+		panic(err)
+	}
+	e.GET("/pong", auth.Authorization(), func(context *gin.Context) {
+		context.JSON(200, gin.H{
+			"message": "pong",
+		})
+	})
 	if err != nil {
 		panic(err)
 	}

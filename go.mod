@@ -3,7 +3,7 @@ module github.com/aurorachat/auth
 go 1.22.5
 
 require (
-	github.com/aurorachat/jwt-tokens v0.0.0-20240807181525-d51b7f4b1f08
+	github.com/aurorachat/jwt-tokens v0.0.4
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0

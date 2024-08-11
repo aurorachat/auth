@@ -1,5 +1,9 @@
 github.com/aurorachat/jwt-tokens v0.0.0-20240807181525-d51b7f4b1f08 h1:53Tv9b8H2X+7jdgVMq6U2OCrfNMxdVBNIEmfm2XRajg=
 github.com/aurorachat/jwt-tokens v0.0.0-20240807181525-d51b7f4b1f08/go.mod h1:Gz7I3duxc0p5X2UMsMDJRc9Q7YPEUYzG53Eu1dOxsok=
+github.com/aurorachat/jwt-tokens v0.0.3 h1:2k2Y1FNaUEOrPmtvfoj+3GUNfG3kD7X79j60S4PmCsA=
+github.com/aurorachat/jwt-tokens v0.0.3/go.mod h1:Gz7I3duxc0p5X2UMsMDJRc9Q7YPEUYzG53Eu1dOxsok=
+github.com/aurorachat/jwt-tokens v0.0.4 h1:EZiPXjb9Ivf2Jh/jLIKgiZBKG27adkpZICyKSwoPHbo=
+github.com/aurorachat/jwt-tokens v0.0.4/go.mod h1:Gz7I3duxc0p5X2UMsMDJRc9Q7YPEUYzG53Eu1dOxsok=
 github.com/bytedance/sonic v1.12.1 h1:jWl5Qz1fy7X1ioY74WqO0KjAMtAGQs4sYnjiEBiyX24=
 github.com/bytedance/sonic v1.12.1/go.mod h1:B8Gt/XvtZ3Fqj+iSKMypzymZxw/FVwgIGKzMzT9r/rk=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=

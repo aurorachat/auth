@@ -59,17 +59,30 @@ func NewOptions(handler Handler, database *gorm.DB, server *gin.Engine, secretTo
 	}
 }
 
-func Initialize(options *Options) error {
-	tokens.SetSecretToken(options.SecretToken)
-	db, err := newAuthDatabase(options.Database)
+type Engine struct {
+	options      *Options
+	authDatabase *authDatabase
+}
+
+func NewEngine(options *Options) (*Engine, error) {
+	instance := &Engine{options: options}
+	err := instance.initialize()
+	return instance, err
+}
+
+func (e *Engine) initialize() error {
+	tokens.SetSecretToken(e.options.SecretToken)
+	db, err := newAuthDatabase(e.options.Database)
 
 	if err != nil {
 		return err
 	}
 
-	service := newAuthService(db, options.Handler)
+	e.authDatabase = db
 
-	options.Server.POST("/auth/register", func(c *gin.Context) {
+	service := newAuthService(db, e.options.Handler)
+
+	e.options.Server.POST("/auth/register", func(c *gin.Context) {
 		var user RegisterDto
 		err := c.BindJSON(&user)
 		if err != nil {
@@ -86,7 +99,7 @@ func Initialize(options *Options) error {
 
 		respondSuccess(c, http.StatusOK, nil)
 	})
-	options.Server.POST("/auth/login", func(c *gin.Context) {
+	e.options.Server.POST("/auth/login", func(c *gin.Context) {
 		var user AuthDto
 
 		err := c.BindJSON(&user)
@@ -107,7 +120,7 @@ func Initialize(options *Options) error {
 			"refreshToken": refreshToken,
 		})
 	})
-	options.Server.POST("/auth/refresh", func(c *gin.Context) {
+	e.options.Server.POST("/auth/refresh", func(c *gin.Context) {
 		var inputRefresh string
 		err := c.Bind(&inputRefresh)
 		if err != nil {
@@ -126,6 +139,28 @@ func Initialize(options *Options) error {
 		})
 	})
 	return nil
+}
+
+func (e *Engine) SetUserActivated(userId int, status bool) error {
+	user, err := e.authDatabase.GetUserById(userId)
+
+	if err != nil {
+		return err
+	}
+
+	user.Deactivated = !status
+	return e.authDatabase.UpdateUser(user)
+}
+
+func (e *Engine) SetUserRole(userId int, newRole string) error {
+	user, err := e.authDatabase.GetUserById(userId)
+
+	if err != nil {
+		return err
+	}
+
+	user.Role = newRole
+	return e.authDatabase.UpdateUser(user)
 }
 
 func respondSuccess(ctx *gin.Context, statusCode int, data interface{}) {

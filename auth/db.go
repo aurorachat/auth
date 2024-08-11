@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -11,6 +12,7 @@ type User struct {
 	Login       string
 	Email       string
 	Password    string
+	Role        string
 	Deactivated bool
 }
 
@@ -23,7 +25,7 @@ type Session struct {
 }
 
 func (session *Session) BeforeCreate(tx *gorm.DB) error {
-	session.ID = uuid.New().String()
+	session.ID = fmt.Sprint("user", session.UserID, "_", uuid.New().String())
 	return nil
 }
 
@@ -53,6 +55,16 @@ func (db *authDatabase) init() error {
 	return nil
 }
 
+func (db *authDatabase) GetUserById(userId int) (*User, error) {
+	var user User
+
+	err := db.conn.First(&user, "id = ?", userId).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (db *authDatabase) GetUserByLogin(login string) (*User, error) {
 	var user User
 
@@ -74,6 +86,10 @@ func (db *authDatabase) GetUserByEmail(email string) (*User, error) {
 
 func (db *authDatabase) AddUser(user *User) error {
 	return db.conn.Create(&user).Error
+}
+
+func (db *authDatabase) UpdateUser(user *User) error {
+	return db.conn.Save(&user).Error
 }
 
 func (db *authDatabase) GetSessionByRefreshToken(refreshToken string) (*Session, error) {
