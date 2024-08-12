@@ -10,6 +10,7 @@ type User struct {
 	*gorm.Model
 	ID          int
 	Login       string
+	DisplayName string
 	Email       string
 	Password    string
 	Role        string

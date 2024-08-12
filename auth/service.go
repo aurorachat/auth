@@ -22,7 +22,7 @@ func (s *authService) DB() *authDatabase {
 	return s.db
 }
 
-func (s *authService) RegisterUser(email, login, password string) error {
+func (s *authService) RegisterUser(email, login, displayName, password string) error {
 	if !utils.IsEmailValid(email) {
 		return errors.New("invalid email")
 	}
@@ -48,10 +48,11 @@ func (s *authService) RegisterUser(email, login, password string) error {
 	}
 
 	userModel := &User{
-		Email:    email,
-		Login:    login,
-		Password: string(encryptedPwd),
-		Role:     "User",
+		Email:       email,
+		Login:       login,
+		Password:    string(encryptedPwd),
+		Role:        "User",
+		DisplayName: displayName,
 	}
 
 	ctx := &ActionContext{
@@ -116,12 +117,13 @@ func (s *authService) AuthenticateUser(remoteIp string, loginOrEmail string, raw
 		return "", "", err
 	}
 	createdJwt, err := tokens.CreateJWT(jwt.MapClaims{
-		"sub":       user.ID,
-		"iss":       "github.com/aurorachat/auth",
-		"exp":       time.Now().Add(time.Minute * 5).Unix(),
-		"iat":       time.Now().Unix(),
-		"role":      user.Role,
-		"sessionId": session.ID,
+		"sub":         user.ID,
+		"iss":         "github.com/aurorachat/auth",
+		"exp":         time.Now().Add(time.Minute * 5).Unix(),
+		"iat":         time.Now().Unix(),
+		"role":        user.Role,
+		"sessionId":   session.ID,
+		"displayName": user.DisplayName,
 	})
 
 	return createdJwt, session.RefreshToken, nil
@@ -155,12 +157,13 @@ func (s *authService) RefreshAuthToken(refreshToken string) (string, string, err
 		return "", "", err
 	}
 	createdJwt, err := tokens.CreateJWT(jwt.MapClaims{
-		"sub":       user.ID,
-		"iss":       "github.com/aurorachat/auth",
-		"exp":       time.Now().Add(time.Minute * 5).Unix(),
-		"iat":       time.Now().Unix(),
-		"role":      user.Role,
-		"sessionId": session.ID,
+		"sub":         user.ID,
+		"iss":         "github.com/aurorachat/auth",
+		"exp":         time.Now().Add(time.Minute * 5).Unix(),
+		"iat":         time.Now().Unix(),
+		"role":        user.Role,
+		"sessionId":   session.ID,
+		"displayName": user.DisplayName,
 	})
 	return createdJwt, session.RefreshToken, err
 }

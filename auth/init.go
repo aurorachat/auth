@@ -90,7 +90,7 @@ func (e *Engine) initialize() error {
 			return
 		}
 
-		err = service.RegisterUser(user.Email, user.Login, user.Password)
+		err = service.RegisterUser(user.Email, user.Login, user.DisplayName, user.Password)
 
 		if err != nil {
 			respondFail(c, http.StatusBadRequest, err.Error())

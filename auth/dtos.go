@@ -1,9 +1,10 @@
 package auth
 
 type RegisterDto struct {
-	Login    string
-	Email    string
-	Password string
+	Login       string
+	DisplayName string
+	Email       string
+	Password    string
 }
 
 type AuthDto struct {
